@@ -23,7 +23,7 @@ install_requires = [
     'bcbio-gff',
     'matplotlib',
     'scipy',
-    'scikit-learn == 0.19.0', # until pickles are rebuilt automatically
+    'scikit-learn == 0.19.2', # until pickles are rebuilt automatically
 ]
 
 tests_require = [

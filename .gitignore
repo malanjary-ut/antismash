@@ -1,6 +1,9 @@
+*.DS_store
 *.swp
+.idea
 .eggs
 *.pyc
+build/
 cover/
 .coverage
 *~
