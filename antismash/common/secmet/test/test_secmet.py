@@ -12,7 +12,8 @@ from Bio.Alphabet.IUPAC import IUPACProtein
 from Bio.Seq import Seq
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 
-from antismash.common.test import helpers
+from antismash.common.test.helpers import get_path_to_nisin_genbank
+
 from ..features import (
     CDSFeature,
     Cluster,
@@ -22,13 +23,23 @@ from ..features import (
     SuperCluster,
 )
 from ..errors import SecmetInvalidInputError
-from .helpers import DummyCDS
+from .helpers import (
+    DummyAntismashDomain,
+    DummyCDS,
+    DummyCDSMotif,
+    DummyCluster,
+    DummyPFAMDomain,
+    DummyRegion,
+    DummySubRegion,
+    DummySuperCluster,
+)
+from ..qualifiers import SecMetQualifier, GeneFunction
 from ..record import Record
 
 
 class TestConversion(unittest.TestCase):
     def test_record_conversion_from_biopython(self):
-        before = list(Bio.SeqIO.parse(helpers.get_path_to_nisin_genbank(), "genbank"))[0]
+        before = list(Bio.SeqIO.parse(get_path_to_nisin_genbank(), "genbank"))[0]
         # sort notes, because direct comparisons otherwise are awful
         for feature in before.features:
             if "note" in feature.qualifiers:
@@ -60,7 +71,7 @@ class TestConversion(unittest.TestCase):
         assert type_counts["aSDomain"] == len(record.get_antismash_domains())
 
     def test_protein_sequences_caught(self):
-        before = list(Bio.SeqIO.parse(helpers.get_path_to_nisin_genbank(), "genbank"))[0]
+        before = list(Bio.SeqIO.parse(get_path_to_nisin_genbank(), "genbank"))[0]
 
         # as a sanity check, make sure it's a seq and it functions as expected
         assert isinstance(before.seq, Seq)
@@ -71,11 +82,103 @@ class TestConversion(unittest.TestCase):
             Record.from_biopython(before, taxon="bacteria")
 
     def test_missing_locations_caught(self):
-        rec = list(Bio.SeqIO.parse(helpers.get_path_to_nisin_genbank(), "genbank"))[0]
+        rec = list(Bio.SeqIO.parse(get_path_to_nisin_genbank(), "genbank"))[0]
         Record.from_biopython(rec, taxon="bacteria")
         rec.features.append(SeqFeature(None, type="broken"))
         with self.assertRaisesRegex(SecmetInvalidInputError, "feature is missing location"):
             Record.from_biopython(rec, taxon="bacteria")
+
+
+class TestStripping(unittest.TestCase):
+    def setUp(self):
+        self.rec = Record(Seq("A"*20))
+        self.cds = DummyCDS(locus_tag="test")
+        self.rec.add_cds_feature(self.cds)
+
+    def test_clusters(self):
+        assert not self.rec.get_clusters()
+        self.rec.add_cluster(DummyCluster())
+        assert self.rec.get_clusters()
+        self.rec.strip_antismash_annotations()
+        assert not self.rec.get_clusters()
+
+    def test_superclusters(self):
+        assert not self.rec.get_superclusters()
+        self.rec.add_supercluster(DummySuperCluster())
+        assert self.rec.get_superclusters()
+        self.rec.strip_antismash_annotations()
+        assert not self.rec.get_superclusters()
+
+    def test_subregions(self):
+        assert not self.rec.get_subregions()
+        self.rec.add_subregion(DummySubRegion())
+        assert self.rec.get_subregions()
+        self.rec.strip_antismash_annotations()
+        assert not self.rec.get_subregions()
+
+    def test_regions(self):
+        assert not self.rec.get_regions()
+        self.rec.add_region(DummyRegion())
+        assert self.rec.get_regions()
+        self.rec.strip_antismash_annotations()
+        assert not self.rec.get_regions()
+
+    def test_antismash_domains(self):
+        assert not self.rec.get_antismash_domains()
+        self.rec.add_antismash_domain(DummyAntismashDomain())
+        assert self.rec.get_antismash_domains()
+        self.rec.strip_antismash_annotations()
+        assert not self.rec.get_antismash_domains()
+
+    def test_pfams(self):
+        assert not self.rec.get_pfam_domains()
+        self.rec.add_pfam_domain(DummyPFAMDomain())
+        assert self.rec.get_pfam_domains()
+        self.rec.strip_antismash_annotations()
+        assert not self.rec.get_pfam_domains()
+
+    def test_cds_motifs(self):
+        assert not self.rec.get_cds_motifs()
+        motif = DummyCDSMotif()
+        self.rec.add_cds_motif(motif)
+        motif.created_by_antismash = False
+        assert self.rec.get_cds_motifs()
+        self.rec.strip_antismash_annotations()
+        assert self.rec.get_cds_motifs()
+        motif.created_by_antismash = True
+        self.rec.strip_antismash_annotations()
+        assert not self.rec.get_cds_motifs()
+
+    def test_cds_secmet(self):
+        domain = SecMetQualifier.Domain("test", 1e-2, 10., 1, "tool")
+        self.cds.sec_met.add_domains([domain])
+        assert self.cds.sec_met.domains == [domain]
+        self.rec.strip_antismash_annotations()
+        assert self.cds.sec_met.domains == []
+
+    def test_cds_nrps_pks(self):  # pylint: disable=attribute-defined-outside-init
+        class HSP:  # pylint: disable=too-few-public-methods
+            def __init__(self, attrs):
+                self.__dict__.update(attrs)
+
+        raw_domain = HSP({
+            "hit_id": "test",
+            "query_start": 1,
+            "query_end": 2,
+            "evalue": 1e-5,
+            "bitscore": 10,
+        })
+        self.cds.nrps_pks.add_domain(raw_domain, "test")
+        assert self.cds.nrps_pks.domains
+        self.rec.strip_antismash_annotations()
+        assert not self.cds.nrps_pks.domains
+
+    def test_cds_gene_functions(self):
+        assert not self.cds.gene_functions
+        self.cds.gene_functions.add(GeneFunction.OTHER, "tool", "desc")
+        assert self.cds.gene_functions
+        self.rec.strip_antismash_annotations()
+        assert not self.cds.gene_functions
 
 
 class TestRecordFeatureNumbering(unittest.TestCase):
@@ -87,7 +190,7 @@ class TestRecordFeatureNumbering(unittest.TestCase):
     def test_cluster_numbering(self):
         features = []
         for start, end in self.pairs:
-            cluster = helpers.DummyCluster(start, end)
+            cluster = DummyCluster(start, end)
             self.record.add_cluster(cluster)
             features.append(cluster)
         features = sorted(features)
@@ -99,7 +202,7 @@ class TestRecordFeatureNumbering(unittest.TestCase):
         features = []
         for location in self.locations:
             supercluster = SuperCluster(SuperCluster.kinds.SINGLE,
-                                        [helpers.DummyCluster(location.start, location.end)])
+                                        [DummyCluster(location.start, location.end)])
             self.record.add_supercluster(supercluster)
             features.append(supercluster)
         features = sorted(features)
@@ -148,7 +251,7 @@ class TestRecord(unittest.TestCase):
             record.add_cds_feature(DummyCDS(start, end))
         for start, end in [(10, 120), (5, 110), (10, 160), (45, 200)]:
             record.clear_clusters()
-            cluster = helpers.DummyCluster(start, end)
+            cluster = DummyCluster(start, end)
             record.add_cluster(cluster)
             assert len(cluster.cds_children) == 2
             for cds in cluster.cds_children:
@@ -156,13 +259,13 @@ class TestRecord(unittest.TestCase):
 
     def test_orphaned_cluster_number(self):
         record = Record("A"*1000)
-        cluster = helpers.DummyCluster(0, 1000)
+        cluster = DummyCluster(0, 1000)
         with self.assertRaisesRegex(ValueError, "Cluster not contained in record"):
             print(record.get_cluster_number(cluster))
 
     def test_orphaned_supercluster_number(self):
         record = Record("A"*1000)
-        cluster = helpers.DummyCluster(0, 1000)
+        cluster = DummyCluster(0, 1000)
         supercluster = SuperCluster(SuperCluster.kinds.SINGLE, [cluster])
         with self.assertRaisesRegex(ValueError, "SuperCluster not contained in record"):
             print(record.get_supercluster_number(supercluster))
@@ -210,12 +313,59 @@ class TestRecord(unittest.TestCase):
 
     def test_read_from_file(self):
         # very basic testing to ensure that the file IO itself functions
-        recs = Record.from_genbank(helpers.get_path_to_nisin_genbank())
+        recs = Record.from_genbank(get_path_to_nisin_genbank())
         assert len(recs) == 1
         rec = recs[0]
         assert rec.get_feature_count() == 24
         assert len(rec.get_cds_features()) == 11
         assert isinstance(rec.get_cds_by_name("nisB"), CDSFeature)
+
+
+class TestCDSFetchByLocation(unittest.TestCase):
+    def setUp(self):
+        self.record = Record(Seq("A"*140))
+        self.record.add_cds_feature(DummyCDS(10, 40, strand=1))
+        self.record.add_cds_feature(DummyCDS(110, 140, strand=-1))
+        self.func = self.record.get_cds_features_within_location
+
+    def test_no_hits(self):
+        assert not self.func(FeatureLocation(50, 90))
+
+    def test_multiple_hits(self):
+        assert self.func(FeatureLocation(10, 140)) == list(self.record.get_cds_features())
+
+    def test_self_hits_same_strand(self):
+        for cds in self.record.get_cds_features():
+            assert self.func(cds.location, with_overlapping=False) == [cds]
+            assert self.func(cds.location, with_overlapping=True) == [cds]
+
+    def test_self_hits_opposite_strand(self):
+        for cds in self.record.get_cds_features():
+            loc = FeatureLocation(cds.location.start, cds.location.end, cds.location.strand * -1)
+            assert self.func(loc, with_overlapping=False) == [cds]
+            assert self.func(loc, with_overlapping=True) == [cds]
+
+    def test_self_hits_no_strand(self):
+        for cds in self.record.get_cds_features():
+            loc = FeatureLocation(cds.location.start, cds.location.end)
+            assert self.func(loc, with_overlapping=False) == [cds]
+            assert self.func(loc, with_overlapping=True) == [cds]
+
+    def test_shared_starts(self):
+        starter = self.record.get_cds_features()[0]
+        longer = DummyCDS(10, 80)
+        shorter = DummyCDS(10, 20)
+        self.record.add_cds_feature(longer)
+        self.record.add_cds_feature(shorter)
+        assert self.func(starter.location, with_overlapping=False) == [shorter, starter]
+        assert self.func(starter.location, with_overlapping=True) == list(self.record.get_cds_features()[:3])
+
+    def test_inception_cds(self):
+        inner = self.record.get_cds_features()[1]
+        outer = DummyCDS(90, 200, strand=1)
+        self.record.add_cds_feature(outer)
+        loc = FeatureLocation(110, 140)
+        assert self.func(loc, with_overlapping=False) == [inner]
 
 
 class TestClusterManipulation(unittest.TestCase):

@@ -193,7 +193,7 @@ ksIII	CerJ-like KSIII enzyme	50	ksIII.hmm
 ladderane	Ladderane lipid ketosynthase	200	ladderane.hmm
 PUFA_KS	Polyunsaturated fatty acid ketosynthase	50	PUFA_KS.hmm
 PF13471	Transglut_core3 domain	22	PF13471.hmm
-PF00733	Asparagine synthase	21	PF00733.hmm
+Asn_synthase	Asparagine synthase	21	PF00733.hmm
 PF05402	PqqD / RRE protein	23	PF05402.hmm
 orf2_PTase	Orf2-type phenol/phenazine prenyltransferase	50	orf2_PTase.hmm
 indole_PTase	bacterial indole prenyltransferase	50	indole_PTase.hmm
@@ -232,3 +232,8 @@ pop	fungal prolyl oligopeptidase	950	pop.hmm
 ustH	fungal ustH-type gamma peptidase	450	ustH.hmm
 truD	TruD pseudouridine synthase	120	truD.hmm
 micKC	Lipolanthine biosynthesis protein	400	micKC.hmm
+GATase_7	Glutamine amidotransferase domain	25	PF13537.hmm
+TIGR03103	GNAT-family acetyltransferase	569	TIGR03103.hmm
+TIGR03104	asparagine synthase family amidotransferase	570	TIGR03104.hmm
+TIGR03106	hydrolase, peptidase M42 family	398	TIGR03106.hmm
+Peptidase_M42	M42 glutamyl aminopeptidase	20	PF05343.hmm
